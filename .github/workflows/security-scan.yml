@@ -31,18 +31,18 @@ jobs:
         run: |
           pip install bandit checkov
       
-          - name: Set environment for plan
-          id: set_env
-          run: |
-            if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
-              echo "TFVARS=dev/terraform.tfvars" >> $GITHUB_ENV
-            elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
-              echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
-            elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then
-              echo "TFVARS=prod/terraform.tfvars" >> $GITHUB_ENV
-            else
-              echo "TFVARS=dev/terraform.tfvars" >> $GITHUB_ENV  # Default fallback
-            fi
+      - name: Set environment for plan
+        id: set_env
+        run: |
+          if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
+            echo "TFVARS=dev/terraform.tfvars" >> $GITHUB_ENV
+          elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
+            echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
+          elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then
+            echo "TFVARS=prod/terraform.tfvars" >> $GITHUB_ENV
+          else
+            echo "TFVARS=dev/terraform.tfvars" >> $GITHUB_ENV  # Default fallback
+          fi
         
 
       - name: Set up Terraform

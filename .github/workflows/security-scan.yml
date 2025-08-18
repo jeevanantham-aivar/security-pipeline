@@ -42,7 +42,7 @@ jobs:
           elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
             echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
           elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then
-            echo "TFVARS=prod/terraform.tfvars" >> $GITHUB_ENV
+            echo "TFVARS=production/terraform.tfvars" >> $GITHUB_ENV
           else
             echo "TFVARS=dev/terraform.tfvars" >> $GITHUB_ENV  # Default fallback
           fi

@@ -14,7 +14,8 @@ jobs:
     if: |
       (startsWith(github.head_ref, 'feature/') && github.base_ref == 'develop') ||
       (github.head_ref == 'develop' && github.base_ref == 'stage') ||
-      (github.head_ref == 'stage' && github.base_ref == 'main')
+      (github.head_ref == 'stage' && github.base_ref == 'main')||
+      (startsWith(github.head_ref, 'feature/') && github.base_ref == 'main')
     runs-on: ubuntu-latest
 
     steps:
@@ -35,6 +36,8 @@ jobs:
         id: set_env
         run: |
           if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
+            echo "TFVARS=dev/terraform.tfvars" >> $GITHUB_ENV
+          elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
             echo "TFVARS=dev/terraform.tfvars" >> $GITHUB_ENV
           elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
             echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV

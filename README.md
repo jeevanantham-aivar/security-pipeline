@@ -35,110 +35,198 @@ repo-root/
 └── README.md
 ```
 
-### Folder Purpose
-- **app**: Application services, Dockerfiles, manifests, etc.
-- **Terraform**: Root Terraform config, reusable modules, and per-environment `.tfvars`.
-- **.github/workflows**: CI pipelines; `security-scan.yml` runs Checkov and posts results to PRs.
+## 🚀 Features
 
-## Terraform Environments
-- Environments: `Terraform/environments/dev|staging|prod/terraform.tfvars`
-- `.tfvars` store environment-specific values (e.g., region, AMI, instance type, tags).
-- Run locally with:
-  - `terraform plan -var-file=Terraform/environments/dev/terraform.tfvars`
-  - Swap `dev` with `staging` or `prod` as needed.
+- **Multi-Environment Support**: Separate configurations for dev, staging, and production
+- **Modular Architecture**: Reusable Terraform modules
+- **CI/CD Integration**: GitHub Actions workflow with matrix-based execution
+- **Security Scanning**: Checkov integration with custom policies
+- **Cost Optimization**: Enforced instance type restrictions
+- **Change Detection**: Automatic detection of which environments need updates
 
-## Branching Strategy (Git Flow)
-- feature/* → PR into `develop`
+## 🔧 Prerequisites
 
-- `develop` → merged into `stage`
-- `stage` → merged into `main`
+- Terraform >= 1.0
+- AWS CLI configured with appropriate credentials
+- GitHub repository with Actions enabled
+- Python 3.11+ (for Checkov)
 
-Notes:
-- Create `develop`, `stage`, and `main` manually at repo initialization.
-- Protect `stage` and `main` to require passing checks before merge.
+## 📋 Environment Configuration
 
-## AWS Authentication
-GitHub Actions uses OpenID Connect (OIDC) to authenticate with AWS securely, without storing long‑lived credentials. For the workflow to assume the IAM role `arn:aws:iam::302263040839:role/Githubactions` via OIDC, you must set up trust between GitHub and AWS:
-- The IAM role (Githubactions) must trust the GitHub OIDC provider `token.actions.githubusercontent.com`.
-- The role’s trust policy must allow this specific GitHub repository (`<owner>/<repo>`) via the OIDC claims (e.g., `sub`, `repository`).
-- Without this configuration, the workflow cannot authenticate with AWS and Terraform plan will fail.
+### Development (dev)
+- **Region**: us-east-1
+- **Instance Type**: t3.micro
+- **Purpose**: Development and testing
 
-High-level steps:
-1) Ensure an IAM OIDC identity provider exists for `token.actions.githubusercontent.com`.
-2) Update the trust policy of `arn:aws:iam::302263040839:role/Githubactions` to permit your repo.
-3) Use `aws-actions/configure-aws-credentials` in the workflow to assume the role via OIDC.
+### Staging (staging)
+- **Region**: us-west-2
+- **Instance Type**: t3.small
+- **Purpose**: Pre-production testing
 
-## Security Scanning Workflow (security-scan.yml)
-- **Runs Checkov** against Terraform code.
-- **Triggers** on both `push` and `pull_request`.
-- **Blocks insecure IaC** configurations before merging.
+### Production (prod)
+- **Region**: us-east-1
+- **Instance Type**: t3.small
+- **Purpose**: Production workloads
 
-### Trigger Rules
-Runs on pull requests in alignment with Git Flow:
-- feature/* → `develop`
-- feature/* → `main`
-- `develop` → `stage`
-- `stage` → `main`
+## 🏗️ Infrastructure Components
 
-This ensures scans run at the same stages as your branching strategy.
+### Example Module
+The `example_module` creates:
+- EC2 instance with Amazon Linux 2
+- Security group with SSH, HTTP, and HTTPS access
+- User data script for web server setup
+- Proper tagging and resource naming
 
-### Set Environment Based on Branch
-Maps PR source/target to `.tfvars`:
-- feature/* → develop → `Terraform/environments/dev/terraform.tfvars`
-- feature/* → main → `Terraform/environments/dev/terraform.tfvars`
-- develop → stage → `Terraform/environments/staging/terraform.tfvars`
-- stage → main → `Terraform/environments/prod/terraform.tfvars`
+## 🔒 Security Policies
 
-### Terraform Validation
-The workflow:
-1) Runs `terraform init`
-2) Runs `terraform plan` with the correct `-var-file`
-3) Converts the plan to JSON for Checkov to scan against real values:
-   - `terraform show -json tfplan.out > tfplan.json`
+### Disallow Public Modules (CKV_CUSTOM_001)
+- **Severity**: HIGH
+- **Purpose**: Ensures only approved private modules are used
+- **Allowed Sources**: `app.terraform.io/my-company-org/*`
 
-### Artifacts & PR Feedback
-- Uploads CI artifacts:
-  - `bandit-report.json` (if app SAST is run)
-  - `checkov-report.json`
-  - `report.md` (scan summary)
-- Posts a sticky PR comment summarizing scan results.
+### Restrict Instance Types (CKV_CUSTOM_002)
+- **Severity**: MEDIUM
+- **Purpose**: Enforces cost optimization through instance type restrictions
+- **Allowed Types**:
+  - EC2: t3.micro, t3.small
+  - RDS: db.t3.micro, db.t3.small
+  - ElastiCache: cache.t3.micro, cache.t3.small
+  - Elasticsearch: t3.small.elasticsearch
 
-### Example: Local Scan
-```bash
-cd Terraform
-terraform init
-terraform plan -out=tfplan.out -var-file=environments/dev/terraform.tfvars
-terraform show -json tfplan.out > tfplan.json
-checkov -f tfplan.json -o json --output-file-path ../checkov-report.json
-```
+## 🚀 CI/CD Workflow
 
-## CI/CD Workflow
-- On PRs, `security-scan.yml` runs and comments results.
-- Merges to protected branches are blocked if security checks fail.
-- This enforces compliance and prevents insecure Terraform changes from being merged.
+### GitHub Actions Workflow: `terraform-plan.yml`
 
-## How to Use
-1) Clone repo:
-```bash
-git clone https://github.com/OWNER/REPO.git
-cd REPO
-```
-2) Create feature branch:
-```bash
-git checkout -b feature/my-change
-```
-3) Commit & push:
-```bash
-git add .
-git commit -m "feat: my change"
-git push -u origin feature/my-change
-```
-4) Open PR into `develop` → GitHub Actions runs `security-scan.yml`
-5) After approval:
-- `develop` → `stage` (pre-release)
-- `stage` → `main` (production)
+The workflow automatically:
+1. **Detects Changes**: Identifies which environment(s) have been modified
+2. **Matrix Execution**: Runs Terraform operations in parallel for changed environments
+3. **Security Scanning**: Executes Checkov with custom policies
+4. **Artifact Storage**: Saves plans and scan results for review
 
-## Prerequisites
-- Terraform installed
-- Checkov installed locally (optional)
-- GitHub Actions pre-configured (`.github/workflows/security-scan.yml`) 
+#### Workflow Triggers
+- Push to `main` branch
+- Pull requests to `main` branch
+
+#### Key Features
+- **Smart Change Detection**: Only processes environments with changes
+- **Parallel Execution**: Matrix strategy for efficient processing
+- **Security First**: Fails on HIGH/CRITICAL vulnerabilities
+- **Artifact Management**: Stores results for audit and review
+
+## 🛠️ Usage
+
+### Local Development
+
+1. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
+
+2. **Select Environment**:
+   ```bash
+   # For development
+   terraform plan -var-file=environments/dev/terraform.tfvars
+   
+   # For staging
+   terraform plan -var-file=environments/staging/terraform.tfvars
+   
+   # For production
+   terraform plan -var-file=environments/prod/terraform.tfvars
+   ```
+
+3. **Apply Changes**:
+   ```bash
+   terraform apply -var-file=environments/dev/terraform.tfvars
+   ```
+
+### CI/CD Pipeline
+
+The GitHub Actions workflow automatically:
+- Detects environment changes
+- Runs `terraform plan` for affected environments
+- Executes Checkov security scanning
+- Fails on security violations
+- Provides detailed feedback and artifacts
+
+## 🔍 Security Scanning
+
+### Checkov Integration
+- **Custom Policies**: Located in `.checkov/policies/`
+- **Scan Targets**: Terraform plans and configuration files
+- **Failure Threshold**: HIGH and CRITICAL vulnerabilities
+- **Output Formats**: CLI, JUnit XML, and text reports
+
+### Policy Categories
+1. **Security**: Module source restrictions
+2. **Cost Optimization**: Instance type limitations
+3. **Compliance**: Resource configuration standards
+
+## 📊 Monitoring and Reporting
+
+### Artifacts Generated
+- Terraform plans for each environment
+- Checkov security scan results
+- JUnit XML reports for CI integration
+- Detailed logs and error messages
+
+### Retention Policy
+- **Plans**: 30 days
+- **Scan Results**: 30 days
+- **Logs**: Available in GitHub Actions
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+1. **Checkov Policy Failures**:
+   - Review policy definitions in `.checkov/policies/`
+   - Ensure resource configurations meet policy requirements
+   - Check policy syntax and validation
+
+2. **Environment Detection Issues**:
+   - Verify git history and commit structure
+   - Check workflow permissions and branch access
+   - Review matrix generation logic
+
+3. **Terraform Validation Errors**:
+   - Run `terraform validate` locally
+   - Check variable definitions and types
+   - Verify module compatibility
+
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create a feature branch**
+3. **Make your changes**
+4. **Test locally with multiple environments**
+5. **Submit a pull request**
+
+### Development Guidelines
+- Follow Terraform best practices
+- Use consistent naming conventions
+- Add comprehensive comments
+- Test with all environments
+- Ensure Checkov policies pass
+
+## 📚 Resources
+
+- [Terraform Documentation](https://www.terraform.io/docs)
+- [Checkov Documentation](https://www.checkov.io/)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [AWS Provider Documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+For questions or issues:
+1. Check the troubleshooting section
+2. Review GitHub Actions logs
+3. Open an issue with detailed information
+4. Contact the DevOps team
+
+---
+
+**Note**: This is a demonstration project. Modify configurations, policies, and workflows according to your organization's requirements and security standards. 

@@ -36,9 +36,9 @@ jobs:
         id: set_env
         run: |
           if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
-            echo "TFVARS=dev/terraform.tfvars" >> $GITHUB_ENV
+            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
           elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
-            echo "TFVARS=dev/terraform.tfvars" >> $GITHUB_ENV
+            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
           elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
             echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
           elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then

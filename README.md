@@ -142,3 +142,19 @@ git push -u origin feature/my-change
 - Terraform installed
 - Checkov installed locally (optional)
 - GitHub Actions pre-configured (`.github/workflows/security-scan.yml`) 
+=======
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create a feature branch**
+3. **Make your changes**
+4. **Test locally with multiple environments**
+5. **Submit a pull request**
+
+### Development Guidelines
+- Follow Terraform best practices
+- Use consistent naming conventions
+- Add comprehensive comments
+- Test with all environments
+- Ensure Checkov policies pass
+

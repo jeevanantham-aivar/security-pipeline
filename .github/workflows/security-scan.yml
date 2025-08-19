@@ -1,84 +1,48 @@
-name: Security Scan
+name: checkov
 
+# Controls when the workflow will run
 on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main", "master" ]
   pull_request:
-    types: [opened, synchronize, reopened]
+    branches: [ "main", "master" ]
 
-permissions:
-  contents: read
-  pull-requests: write
-  security-events: write # REQUIRED for SARIF upload
-  id-token: write
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  security-scan:
-    if: |
-      (startsWith(github.head_ref, 'feature/') && github.base_ref == 'develop') ||
-      (github.head_ref == 'develop' && github.base_ref == 'stage') ||
-      (github.head_ref == 'stage' && github.base_ref == 'main') ||
-      (startsWith(github.head_ref, 'feature/') && github.base_ref == 'main')
+  # This workflow contains a single job called "scan"
+  scan:
+    permissions:
+      contents: read # for actions/checkout to fetch code
+      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
+      actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
+      
+    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
+    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      # Checks-out your repository under $GITHUB_WORKSPACE, so follow-up steps can access it
+      - uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Checkov GitHub Action
+        uses: bridgecrewio/checkov-action@v12
         with:
-          role-to-assume: arn:aws:iam::302263040839:role/Githubactions
-          aws-region: ap-south-1
-
-      - name: Install Checkov, SARIF tools
-        run: |
-          pip install checkov
-
-      - name: Set environment for plan
-        id: set_env
-        run: |
-          if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
-            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
-          elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
-            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
-          elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
-            echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
-          elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then
-            echo "TFVARS=production/terraform.tfvars" >> $GITHUB_ENV
-          else
-            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV # Default fallback
-          fi
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: Terraform
-
-      - name: Terraform Plan
-        run: terraform plan -var-file=./environments/${TFVARS} -out=tfplan.binary
-        working-directory: Terraform
-
-      - name: Convert Plan to JSON
-        run: terraform show -json tfplan.binary > tfplan.json
-        working-directory: Terraform
-
-      # Run Checkov (SARIF)
-      - name: Run Checkov (SARIF)
-        run: checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
-        working-directory: Terraform
-
-      # Upload Checkov SARIF (ONLY this will appear in Security tab)
-      - name: Upload Checkov SARIF results
-        uses: github/codeql-action/upload-sarif@v3
+          # This will add both a CLI output to the console and create a results.sarif file
+          output_format: cli,sarif
+          output_file_path: console,results.sarif
+        
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v2
+        
+        # Results are generated only on a success or failure
+        # this is required since GitHub by default won't run the next step
+        # when the previous one has failed. Security checks that do not pass will 'fail'.
+        # An alternative is to add `continue-on-error: true` to the previous step
+        # Or 'soft_fail: true' to checkov.
+        if: success() || failure()
         with:
-          sarif_file: Terraform/checkov.sarif
-
-      # (Optional) Upload artifacts for debugging
-      - name: Upload Reports as Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-reports
-          path: |
-            Terraform/checkov.sarif
-          retention-days: 30
+          sarif_file: results.sarif

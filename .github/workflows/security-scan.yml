@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write  # Needed for posting PR comments
+  pull-requests: write     # Needed for posting PR comments
   id-token: write
 
 jobs:
@@ -17,7 +17,6 @@ jobs:
       (github.head_ref == 'stage' && github.base_ref == 'main') ||
       (startsWith(github.head_ref, 'feature/') && github.base_ref == 'main')
     runs-on: ubuntu-latest
-
     steps:
       # 1️⃣ Checkout repository
       - name: Checkout Code
@@ -36,7 +35,7 @@ jobs:
           pip install checkov
           curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b /usr/local/bin
 
-      # 4️⃣ Determine environment for Terraform variables
+      # 4️⃣ Set environment for Terraform plan
       - name: Set environment for Terraform plan
         id: set_env
         run: |
@@ -52,7 +51,7 @@ jobs:
             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
           fi
 
-      # 5️⃣ Setup Terraform CLI
+      # 5️⃣ Set up Terraform CLI
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -61,22 +60,22 @@ jobs:
         run: terraform init
         working-directory: Terraform
 
-      # 7️⃣ Terraform Plan (optional, if needed)
+      # 7️⃣ Generate Terraform plan file
       - name: Terraform Plan
-        run: terraform plan -var-file=./environments/${TFVARS} -out=tfplan.binary
+        run: terraform plan -var-file=${TFVARS} -out=tfplan.binary
         working-directory: Terraform
 
-      # 8️⃣ Run Checkov directly on Terraform HCL files + post PR comments via Reviewdog
-      - name: Run Checkov + Reviewdog (PR Comments)
-        run: |
-          # Scan all Terraform HCL files in the modules directory and save SARIF
-          checkov -d Terraform/modules -o sarif --output-file-path Terraform/checkov.sarif || true
-      
-          # Post SARIF results as PR comments
-          reviewdog -f=sarif \
-                     -name="Checkov" \
-                     -reporter=github-pr-review \
-                     -fail-on-error=false \
-                     -input=Terraform/checkov.sarif
-        env:
-          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 8️⃣ Convert plan to JSON for Checkov scanning
+      - name: Convert Plan to JSON
+        run: terraform show -json tfplan.binary > tfplan.json
+        working-directory: Terraform
+
+      # 9️⃣ Run Checkov scan on Terraform plan file in SARIF format
+      - name: Run Checkov Scan on Plan
+        run: checkov -f Terraform/tfplan.json --output sarif --output-file Terraform/checkov.sarif
+
+      # 🔟 Upload SARIF results to GitHub Advanced Security (Security tab)
+      - name: Upload SARIF results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: Terraform/checkov.sarif

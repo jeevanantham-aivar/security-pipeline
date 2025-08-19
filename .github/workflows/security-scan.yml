@@ -1,139 +1,139 @@
-name: Security Scan
+# name: Security Scan
 
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+# on:
+#   pull_request:
+#     types: [opened, synchronize, reopened]
 
-permissions:
-  contents: read
-  pull-requests: write
-  security-events: write   # REQUIRED for SARIF upload
-  id-token: write
+# permissions:
+#   contents: read
+#   pull-requests: write
+#   security-events: write   # REQUIRED for SARIF upload
+#   id-token: write
 
-jobs:
-  security-scan:
-    if: |
-      (startsWith(github.head_ref, 'feature/') && github.base_ref == 'develop') ||
-      (github.head_ref == 'develop' && github.base_ref == 'stage') ||
-      (github.head_ref == 'stage' && github.base_ref == 'main')||
-      (startsWith(github.head_ref, 'feature/') && github.base_ref == 'main')
-    runs-on: ubuntu-latest
+# jobs:
+#   security-scan:
+#     if: |
+#       (startsWith(github.head_ref, 'feature/') && github.base_ref == 'develop') ||
+#       (github.head_ref == 'develop' && github.base_ref == 'stage') ||
+#       (github.head_ref == 'stage' && github.base_ref == 'main')||
+#       (startsWith(github.head_ref, 'feature/') && github.base_ref == 'main')
+#     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::302263040839:role/Githubactions
-          aws-region: ap-south-1
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: arn:aws:iam::302263040839:role/Githubactions
+#           aws-region: ap-south-1
 
-      - name: Install Bandit and Checkov
-        run: |
-          pip install "bandit[sarif]" checkov
+#       - name: Install Bandit and Checkov
+#         run: |
+#           pip install "bandit[sarif]" checkov
 
-      - name: Set environment for plan
-        id: set_env
-        run: |
-          if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
-            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
-          elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
-            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
-          elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
-            echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
-          elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then
-            echo "TFVARS=production/terraform.tfvars" >> $GITHUB_ENV
-          else
-            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV  # Default fallback
-          fi
+#       - name: Set environment for plan
+#         id: set_env
+#         run: |
+#           if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
+#             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
+#           elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
+#             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
+#           elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
+#             echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
+#           elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then
+#             echo "TFVARS=production/terraform.tfvars" >> $GITHUB_ENV
+#           else
+#             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV  # Default fallback
+#           fi
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+#       - name: Set up Terraform
+#         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init
-        run: terraform init
-        working-directory: Terraform
+#       - name: Terraform Init
+#         run: terraform init
+#         working-directory: Terraform
 
-      - name: Terraform Plan
-        run: terraform plan -var-file=./environments/${TFVARS} -out=tfplan.binary
-        working-directory: Terraform
+#       - name: Terraform Plan
+#         run: terraform plan -var-file=./environments/${TFVARS} -out=tfplan.binary
+#         working-directory: Terraform
 
-      - name: Convert Plan to JSON
-        run: terraform show -json tfplan.binary > tfplan.json
-        working-directory: Terraform
+#       - name: Convert Plan to JSON
+#         run: terraform show -json tfplan.binary > tfplan.json
+#         working-directory: Terraform
 
-      # -------- SECURITY TOOLS -------- #
+#       # -------- SECURITY TOOLS -------- #
 
-      - name: Run Bandit (SARIF + JSON)
-        run: |
-          bandit -r . -f json -o bandit-report.json || true
-          bandit -r . -f sarif -o bandit.sarif || true
+#       - name: Run Bandit (SARIF + JSON)
+#         run: |
+#           bandit -r . -f json -o bandit-report.json || true
+#           bandit -r . -f sarif -o bandit.sarif || true
 
-      - name: Run Checkov (SARIF + JSON)
-        run: |
-          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o json > checkov-report.json || true
-          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
-        working-directory: Terraform
+#       - name: Run Checkov (SARIF + JSON)
+#         run: |
+#           checkov -f tfplan.json --repo-root-for-plan-enrichment . -o json > checkov-report.json || true
+#           checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
+#         working-directory: Terraform
 
-      # -------- UPLOAD TO GITHUB CODE SCANNING -------- #
+#       # -------- UPLOAD TO GITHUB CODE SCANNING -------- #
 
-      - name: Upload Bandit SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: bandit.sarif
-          category: bandit
+#       - name: Upload Bandit SARIF
+#         uses: github/codeql-action/upload-sarif@v3
+#         with:
+#           sarif_file: bandit.sarif
+#           category: bandit
 
-      - name: Upload Checkov SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: Terraform/checkov.sarif
-          category: checkov
+#       - name: Upload Checkov SARIF
+#         uses: github/codeql-action/upload-sarif@v3
+#         with:
+#           sarif_file: Terraform/checkov.sarif
+#           category: checkov
 
-      # -------- SUMMARY REPORT FOR PR -------- #
+#       # -------- SUMMARY REPORT FOR PR -------- #
 
-      - name: Format Reports
-        run: |
-          echo "# :shield: Security Scan Report" > report.md
-          echo "" >> report.md
+#       - name: Format Reports
+#         run: |
+#           echo "# :shield: Security Scan Report" > report.md
+#           echo "" >> report.md
 
-          CHECKOV_PASSED=$(jq '.summary.passed' Terraform/checkov-report.json 2>/dev/null || echo "0")
-          CHECKOV_FAILED=$(jq '.summary.failed' Terraform/checkov-report.json 2>/dev/null || echo "0")
-          CHECKOV_SKIPPED=$(jq '.summary.skipped' Terraform/checkov-report.json 2>/dev/null || echo "0")
-          BANDIT_FAILED=$(jq '.results | length' bandit-report.json 2>/dev/null || echo "0")
+#           CHECKOV_PASSED=$(jq '.summary.passed' Terraform/checkov-report.json 2>/dev/null || echo "0")
+#           CHECKOV_FAILED=$(jq '.summary.failed' Terraform/checkov-report.json 2>/dev/null || echo "0")
+#           CHECKOV_SKIPPED=$(jq '.summary.skipped' Terraform/checkov-report.json 2>/dev/null || echo "0")
+#           BANDIT_FAILED=$(jq '.results | length' bandit-report.json 2>/dev/null || echo "0")
 
-          {
-            echo "1️⃣ **Checkov Report**"
-            echo "   - 🟢 **PASSED Checks:** $CHECKOV_PASSED"
-            echo "   - 🔴 **FAILED Checks:** $CHECKOV_FAILED"
-            echo "   - ⚠️  **SKIPPED Checks:** $CHECKOV_SKIPPED"
-            echo ""
-            echo "2️⃣ **Bandit Report**"
-            echo "   - 🔴 **FAILED Checks:** $BANDIT_FAILED"
-            echo ""
-            if [ "$CHECKOV_FAILED" -eq 0 ] && [ "$BANDIT_FAILED" -eq 0 ]; then
-              echo ":white_check_mark: Everything looks secure. Great job! 🔐"
-            else
-              echo "*⚡️ Every 🔴 is a risk bomb. Defuse before you MERGE!*"
-            fi
-            echo ""
-            echo "---"
-            echo ""
-          } >> report.md
+#           {
+#             echo "1️⃣ **Checkov Report**"
+#             echo "   - 🟢 **PASSED Checks:** $CHECKOV_PASSED"
+#             echo "   - 🔴 **FAILED Checks:** $CHECKOV_FAILED"
+#             echo "   - ⚠️  **SKIPPED Checks:** $CHECKOV_SKIPPED"
+#             echo ""
+#             echo "2️⃣ **Bandit Report**"
+#             echo "   - 🔴 **FAILED Checks:** $BANDIT_FAILED"
+#             echo ""
+#             if [ "$CHECKOV_FAILED" -eq 0 ] && [ "$BANDIT_FAILED" -eq 0 ]; then
+#               echo ":white_check_mark: Everything looks secure. Great job! 🔐"
+#             else
+#               echo "*⚡️ Every 🔴 is a risk bomb. Defuse before you MERGE!*"
+#             fi
+#             echo ""
+#             echo "---"
+#             echo ""
+#           } >> report.md
 
-      - name: Upload Reports as Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-reports
-          path: |
-            bandit-report.json
-            bandit.sarif
-            Terraform/checkov-report.json
-            Terraform/checkov.sarif
-            report.md
-          retention-days: 30
+#       - name: Upload Reports as Artifacts
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: security-reports
+#           path: |
+#             bandit-report.json
+#             bandit.sarif
+#             Terraform/checkov-report.json
+#             Terraform/checkov.sarif
+#             report.md
+#           retention-days: 30
 
-      - name: Post Security Scan Summary to PR
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          path: report.md
+#       - name: Post Security Scan Summary to PR
+#         uses: marocchino/sticky-pull-request-comment@v2
+#         with:
+#           path: report.md

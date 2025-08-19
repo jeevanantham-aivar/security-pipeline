@@ -74,9 +74,10 @@ jobs:
       # 9️⃣ Run Checkov + post PR comments via Reviewdog
       - name: Run Checkov with Reviewdog (PR Comments)
         run: |
-          # Generate SARIF output
-          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif > checkov.sarif || true
-          # Send SARIF results to PR comments
+          # Generate **pure SARIF output** to a file (do NOT redirect stdout)
+          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
+      
+          # Post SARIF results as PR comments
           reviewdog -f=sarif \
                      -name="Checkov" \
                      -reporter=github-pr-review \
@@ -84,3 +85,4 @@ jobs:
         working-directory: Terraform
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      

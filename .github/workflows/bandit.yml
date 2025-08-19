@@ -1,4 +1,4 @@
-name: Bandit
+name: Bandit SARIF Scan
 
 on:
   push:
@@ -9,21 +9,29 @@ on:
     - cron: '43 10 * * 1'
 
 jobs:
-  bandit:
+  bandit-scan:
     permissions:
-      contents: read
-      security-events: write
-      actions: read
+      contents: read              # for checkout
+      security-events: write      # to upload SARIF
+      actions: read               # private repo needs this for code scanning status
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Run Bandit and output markdown
-      - name: Run Bandit
-        run: bandit -r . -f markdown -o bandit.md || true
+      # Run Bandit and output SARIF (if Bandit SARIF native support is not available, use a converter like sarif-tools)
+      - name: Install Bandit and SARIF tools
+        run: |
+          pip install bandit sarif-tools
 
-      # Post (or update) Bandit report as a sticky PR comment
-      - name: Post Bandit Report to PR
-        uses: marocchino/sticky-pull-request-comment@v2
+      - name: Run Bandit (JSON)
+        run: bandit -r . -f json -o bandit.json || true
+
+      - name: Convert Bandit JSON to SARIF
+        run: |
+          sarif-tools from-bandit bandit.json > bandit.sarif
+
+      # Upload SARIF to GitHub
+      - name: Upload Bandit SARIF results
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          path: bandit.md
+          sarif_file: bandit.sarif

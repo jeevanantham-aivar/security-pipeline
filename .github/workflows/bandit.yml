@@ -1,37 +1,37 @@
-name: Bandit SARIF Scan
+# name: Bandit SARIF Scan
 
-on:
-  push:
-    branches: [ "feature/testing1" ]
-  pull_request:
-    branches: [ "feature/testing1" ]
-  schedule:
-    - cron: '43 10 * * 1'
+# on:
+#   push:
+#     branches: [ "feature/testing1" ]
+#   pull_request:
+#     branches: [ "feature/testing1" ]
+#   schedule:
+#     - cron: '43 10 * * 1'
 
-jobs:
-  bandit-scan:
-    permissions:
-      contents: read              # for checkout
-      security-events: write      # to upload SARIF
-      actions: read               # private repo needs this for code scanning status
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+# jobs:
+#   bandit-scan:
+#     permissions:
+#       contents: read              # for checkout
+#       security-events: write      # to upload SARIF
+#       actions: read               # private repo needs this for code scanning status
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
 
-      # Run Bandit and output SARIF (if Bandit SARIF native support is not available, use a converter like sarif-tools)
-      - name: Install Bandit and SARIF tools
-        run: |
-          pip install bandit sarif-tools
+#       # Run Bandit and output SARIF (if Bandit SARIF native support is not available, use a converter like sarif-tools)
+#       - name: Install Bandit and SARIF tools
+#         run: |
+#           pip install bandit sarif-tools
 
-      - name: Run Bandit (JSON)
-        run: bandit -r . -f json -o bandit.json || true
+#       - name: Run Bandit (JSON)
+#         run: bandit -r . -f json -o bandit.json || true
 
-      - name: Convert Bandit JSON to SARIF
-        run: |
-          sarif-tools from-bandit bandit.json > bandit.sarif
+#       - name: Convert Bandit JSON to SARIF
+#         run: |
+#           sarif-tools from-bandit bandit.json > bandit.sarif
 
-      # Upload SARIF to GitHub
-      - name: Upload Bandit SARIF results
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: bandit.sarif
+#       # Upload SARIF to GitHub
+#       - name: Upload Bandit SARIF results
+#         uses: github/codeql-action/upload-sarif@v3
+#         with:
+#           sarif_file: bandit.sarif

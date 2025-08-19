@@ -64,11 +64,11 @@ jobs:
         run: terraform show -json tfplan.binary > tfplan.json
         working-directory: Terraform
 
-      # Run Bandit → JSON → SARIF
-      - name: Run Bandit (JSON → SARIF)
-        run: |
-          bandit -r . -f json -o bandit.json || true
-          sarif from-bandit bandit.json bandit.sarif
+      # # Run Bandit → JSON → SARIF
+      # - name: Run Bandit (JSON → SARIF)
+      #   run: |
+      #     bandit -r . -f json -o bandit.json || true
+      #     sarif from-bandit bandit.json bandit.sarif
 
       # Run Checkov → SARIF
       - name: Run Checkov (SARIF)

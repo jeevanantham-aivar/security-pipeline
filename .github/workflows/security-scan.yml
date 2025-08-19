@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: write  # Needed for posting PR comments
   id-token: write
 
 jobs:
@@ -19,26 +19,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      # 2️⃣ Configure AWS credentials
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::302263040839:role/Githubactions
           aws-region: ap-south-1
 
+      # 3️⃣ Install Checkov & Reviewdog
       - name: Install Checkov & Reviewdog
         run: |
           pip install checkov
           curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b /usr/local/bin
 
-      - name: Set environment for plan
+      # 4️⃣ Determine environment for Terraform variables
+      - name: Set environment for Terraform plan
         id: set_env
         run: |
           if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
-          elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
+          elif [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "main" ]]; then
             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
           elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
             echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
@@ -48,27 +52,35 @@ jobs:
             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
           fi
 
+      # 5️⃣ Setup Terraform CLI
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # 6️⃣ Initialize Terraform
       - name: Terraform Init
         run: terraform init
         working-directory: Terraform
 
+      # 7️⃣ Terraform Plan
       - name: Terraform Plan
         run: terraform plan -var-file=./environments/${TFVARS} -out=tfplan.binary
         working-directory: Terraform
 
+      # 8️⃣ Convert plan to JSON for Checkov
       - name: Convert Plan to JSON
         run: terraform show -json tfplan.binary > tfplan.json
         working-directory: Terraform
 
-      # ✅ Run Checkov + send results to PR comments using SARIF
+      # 9️⃣ Run Checkov + post PR comments via Reviewdog
       - name: Run Checkov with Reviewdog (PR Comments)
         run: |
+          # Generate SARIF output
           checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif > checkov.sarif || true
-          reviewdog -f=sarif -name="Checkov" -reporter=github-pr-review -fail-on-error=false < checkov.sarif
+          # Send SARIF results to PR comments
+          reviewdog -f=sarif \
+                     -name="Checkov" \
+                     -reporter=github-pr-review \
+                     -fail-on-error=false < checkov.sarif
         working-directory: Terraform
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

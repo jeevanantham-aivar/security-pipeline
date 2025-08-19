@@ -61,18 +61,18 @@ jobs:
         run: terraform init
         working-directory: Terraform
 
-      # 7️⃣ Terraform Plan (optional if you want plan output)
+      # 7️⃣ Terraform Plan (optional, if needed)
       - name: Terraform Plan
         run: terraform plan -var-file=./environments/${TFVARS} -out=tfplan.binary
         working-directory: Terraform
 
-      # 8️⃣ Run Checkov directly on Terraform HCL files
+      # 8️⃣ Run Checkov directly on Terraform HCL files + post PR comments via Reviewdog
       - name: Run Checkov + Reviewdog (PR Comments)
         run: |
-          # Scan all Terraform HCL files in the modules directory
+          # Scan all Terraform HCL files in the modules directory and save SARIF
           checkov -d Terraform/modules -o sarif --output-file-path checkov.sarif || true
-          
-          # Post SARIF results to PR comments
+
+          # Post SARIF results as PR comments
           reviewdog -f=sarif \
                      -name="Checkov" \
                      -reporter=github-pr-review \

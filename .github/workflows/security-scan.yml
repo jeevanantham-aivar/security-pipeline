@@ -76,11 +76,11 @@ jobs:
           checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
         working-directory: Terraform
 
-      # Upload Bandit SARIF
-      - name: Upload Bandit SARIF results
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: bandit.sarif
+      # # Upload Bandit SARIF
+      # - name: Upload Bandit SARIF results
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   with:
+      #     sarif_file: bandit.sarif
 
       # Upload Checkov SARIF
       - name: Upload Checkov SARIF results

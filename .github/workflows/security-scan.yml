@@ -30,9 +30,11 @@ jobs:
           aws-region: ap-south-1
 
       # Install tools
-      - name: Install Bandit, Checkov, SARIF tools
+      - name: Install Bandit, Checkov, SARIF tools, Reviewdog
         run: |
           pip install bandit checkov sarif-tools
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh \
+            | sh -s -- -b /usr/local/bin
 
       # Set TFVARS based on branch flow
       - name: Set environment for plan
@@ -64,31 +66,39 @@ jobs:
         run: terraform show -json tfplan.binary > tfplan.json
         working-directory: Terraform
 
-      # # Run Bandit → JSON → SARIF
-      # - name: Run Bandit (JSON → SARIF)
+      # ---------------- Bandit ----------------
+      # - name: Run Bandit
       #   run: |
       #     bandit -r . -f json -o bandit.json || true
       #     sarif from-bandit bandit.json bandit.sarif
 
-      # Run Checkov → SARIF
-      - name: Run Checkov (SARIF)
-        run: |
-          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
-        working-directory: Terraform
-
-      # # Upload Bandit SARIF
-      # - name: Upload Bandit SARIF results
+      # - name: Upload Bandit SARIF
       #   uses: github/codeql-action/upload-sarif@v3
       #   with:
       #     sarif_file: bandit.sarif
 
-      # Upload Checkov SARIF
-      - name: Upload Checkov SARIF results
+      # - name: Report Bandit Issues (Reviewdog)
+      #   run: |
+      #     bandit -r . -f txt || true | reviewdog -f=golint -name="bandit" -reporter=github-pr-review
+
+      # ---------------- Checkov ----------------
+      - name: Run Checkov
+        run: |
+          checkov -f tfplan.json --repo-root-for-plan-enrichment . \
+            -o sarif --output-file-path checkov.sarif || true
+        working-directory: Terraform
+
+      - name: Upload Checkov SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: Terraform/checkov.sarif
 
-      # Upload raw reports as artifacts (for debugging)
+      - name: Report Checkov Issues (Reviewdog)
+        run: |
+          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o cli || true \
+            | reviewdog -efm="%f:%l:%m" -name="checkov" -reporter=github-pr-review
+
+      # ---------------- Artifacts ----------------
       - name: Upload Reports as Artifacts
         uses: actions/upload-artifact@v4
         with:

@@ -65,7 +65,7 @@ jobs:
 
       # Run Checkov (SARIF)
       - name: Run Checkov (SARIF)
-        run: checkov -f Terraform/tfplan.json --output sarif --output-file Terraform/checkov.sarif --sarif-version 2.1.0
+        run: checkov -f Terraform/tfplan.json --output sarif --output-file Terraform/checkov.sarif
 
         
 

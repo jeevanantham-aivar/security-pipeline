@@ -7,62 +7,79 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  security-events: write # REQUIRED for SARIF upload
   id-token: write
 
 jobs:
   security-scan:
+    if: |
+      (startsWith(github.head_ref, 'feature/') && github.base_ref == 'develop') ||
+      (github.head_ref == 'develop' && github.base_ref == 'stage') ||
+      (github.head_ref == 'stage' && github.base_ref == 'main') ||
+      (startsWith(github.head_ref, 'feature/') && github.base_ref == 'main')
     runs-on: ubuntu-latest
+
     steps:
-      # Step 1: Checkout repository
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Step 2: Install Checkov
-      - name: Install Checkov
-        run: pip install --upgrade checkov
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::302263040839:role/Githubactions
+          aws-region: ap-south-1
 
-      # Step 3: Install Reviewdog (optional, if you want PR comments, see note)
-      - name: Install Reviewdog
+      - name: Install Checkov, SARIF tools
         run: |
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b /usr/local/bin
+          pip install checkov
 
-      # Step 4: Set environment for Terraform plan
-      - name: Set TFVARS path
-        id: set_tfvars
+      - name: Set environment for plan
+        id: set_env
         run: |
-          # Set to the tfvars path you expect (change as needed)
-          echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
+          if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
+            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
+          elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
+            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
+          elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
+            echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
+          elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then
+            echo "TFVARS=production/terraform.tfvars" >> $GITHUB_ENV
+          else
+            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV # Default fallback
+          fi
 
-      # Step 5: Set up Terraform
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # Step 6: Initialize Terraform
       - name: Terraform Init
         run: terraform init
         working-directory: Terraform
 
-      # Step 7: Generate Terraform plan file (handle missing tfvars file)
       - name: Terraform Plan
-        run: |
-          if [ -f "${TFVARS}" ]; then
-            terraform plan -var-file=${TFVARS} -out=tfplan.binary
-          else
-            terraform plan -out=tfplan.binary
-          fi
+        run: terraform plan -var-file=./environments/${TFVARS} -out=tfplan.binary
         working-directory: Terraform
 
-      # Step 8: Convert plan to JSON for Checkov scanning
       - name: Convert Plan to JSON
         run: terraform show -json tfplan.binary > tfplan.json
         working-directory: Terraform
 
-      # Step 9: Run Checkov scan on Terraform plan file, SARIF format v2.1.0+
-      - name: Run Checkov Scan on Plan
+      # Run Checkov (SARIF)
+      - name: Run Checkov (SARIF)
         run: checkov -f Terraform/tfplan.json --output sarif --output-file Terraform/checkov.sarif --sarif-version 2.1.0
 
-      # Step 10: Upload SARIF results to GitHub Advanced Security (Security tab)
-      - name: Upload SARIF results to GitHub Security tab
+        
+
+      # Upload Checkov SARIF (ONLY this will appear in Security tab)
+      - name: Upload Checkov SARIF results
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: Terraform/checkov.sarif
+
+      # (Optional) Upload artifacts for debugging
+      - name: Upload Reports as Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            Terraform/checkov.sarif
+          retention-days: 30

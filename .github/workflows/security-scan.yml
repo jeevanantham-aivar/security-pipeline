@@ -29,19 +29,16 @@ jobs:
           role-to-assume: arn:aws:iam::302263040839:role/Githubactions
           aws-region: ap-south-1
 
-      # Install tools
-      - name: Install Bandit, Checkov, SARIF tools, Reviewdog
+      - name: Install Checkov, SARIF tools
         run: |
-          pip install bandit checkov sarif-tools
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh \
-            | sh -s -- -b /usr/local/bin
+          pip install checkov
 
-      # Set TFVARS based on branch flow
       - name: Set environment for plan
+        id: set_env
         run: |
-          if [[ "${{ github.head_ref }}" =~ feature/.* && "${{ github.base_ref }}" == "develop" ]]; then
+          if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
-          elif [[ "${{ github.head_ref }}" =~ feature/.* && "${{ github.base_ref }}" == "main" ]]; then
+          elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
           elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
             echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
@@ -66,45 +63,22 @@ jobs:
         run: terraform show -json tfplan.binary > tfplan.json
         working-directory: Terraform
 
-      # ---------------- Bandit ----------------
-      # - name: Run Bandit
-      #   run: |
-      #     bandit -r . -f json -o bandit.json || true
-      #     sarif from-bandit bandit.json bandit.sarif
-
-      # - name: Upload Bandit SARIF
-      #   uses: github/codeql-action/upload-sarif@v3
-      #   with:
-      #     sarif_file: bandit.sarif
-
-      # - name: Report Bandit Issues (Reviewdog)
-      #   run: |
-      #     bandit -r . -f txt || true | reviewdog -f=golint -name="bandit" -reporter=github-pr-review
-
-      # ---------------- Checkov ----------------
-      - name: Run Checkov
-        run: |
-          checkov -f tfplan.json --repo-root-for-plan-enrichment . \
-            -o sarif --output-file-path checkov.sarif || true
+      # Run Checkov (SARIF)
+      - name: Run Checkov (SARIF)
+        run: checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
         working-directory: Terraform
 
-      - name: Upload Checkov SARIF
+      # Upload Checkov SARIF (ONLY this will appear in Security tab)
+      - name: Upload Checkov SARIF results
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: Terraform/checkov.sarif
 
-      - name: Report Checkov Issues (Reviewdog)
-        run: |
-          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o cli || true \
-            | reviewdog -efm="%f:%l:%m" -name="checkov" -reporter=github-pr-review
-
-      # ---------------- Artifacts ----------------
+      # (Optional) Upload artifacts for debugging
       - name: Upload Reports as Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
-            bandit.json
-            bandit.sarif
             Terraform/checkov.sarif
           retention-days: 30

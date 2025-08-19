@@ -31,7 +31,6 @@ jobs:
     # ----------------- 1. Checkout Code -----------------
     - name: Checkout repository
       uses: actions/checkout@v4
-      # ✅ Required: pulls your Terraform + Python code
 
     # ----------------- 2. Initialize CodeQL -----------------
     - name: Initialize CodeQL
@@ -39,42 +38,41 @@ jobs:
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
-      # ✅ Sets up CodeQL to scan your Python + Actions code
 
     # ----------------- 3. CodeQL Analysis -----------------
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
       with:
         category: "/language:${{matrix.language}}"
-      # ✅ Runs CodeQL, sends SARIF results to GitHub Security tab
-      # (baseline protection against CVEs + security flaws)
 
     # ----------------- 4. Setup Python -----------------
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.x"
-      # ✅ Required for running Bandit & Checkov
 
     - name: Install Bandit + Checkov
       run: |
-        pip install bandit checkov reviewdog
-      # ✅ Install security scanners + reviewdog
+        pip install bandit checkov
 
-    # ----------------- 5. Run Bandit -----------------
+    # ----------------- 5. Install reviewdog -----------------
+    - name: Install reviewdog
+      uses: reviewdog/action-setup@v1
+      with:
+        reviewdog_version: latest
+
+    # ----------------- 6. Run Bandit -----------------
     - name: Run Bandit (Python Security)
       run: |
-        bandit -r . -f json | reviewdog -f=bandit -name="Bandit" -reporter=github-pr-review -level=error
+        bandit -r . -f sarif -o bandit.sarif || true
+        reviewdog -f=sarif -name="Bandit" -reporter=github-pr-review < bandit.sarif
       env:
         REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # ✅ Bandit scans Python code for security issues
-      # ✅ reviewdog converts results → PR inline comments
 
-    # ----------------- 6. Run Checkov -----------------
+    # ----------------- 7. Run Checkov -----------------
     - name: Run Checkov (Terraform Security)
       run: |
-        checkov -d . -o json | reviewdog -f=checkov -name="Checkov" -reporter=github-pr-review -level=error
+        checkov -d . -o sarif > checkov.sarif || true
+        reviewdog -f=sarif -name="Checkov" -reporter=github-pr-review < checkov.sarif
       env:
         REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # ✅ Checkov scans Terraform/IaC for misconfigs
-      # ✅ reviewdog adds inline PR comments with findings

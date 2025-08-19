@@ -29,17 +29,17 @@ jobs:
           role-to-assume: arn:aws:iam::302263040839:role/Githubactions
           aws-region: ap-south-1
 
-      # Install tools (Bandit, Checkov, SARIF tools)
+      # Install tools
       - name: Install Bandit, Checkov, SARIF tools
         run: |
           pip install bandit checkov sarif-tools
 
+      # Set TFVARS based on branch flow
       - name: Set environment for plan
-        id: set_env
         run: |
-          if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
+          if [[ "${{ github.head_ref }}" =~ feature/.* && "${{ github.base_ref }}" == "develop" ]]; then
             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
-          elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
+          elif [[ "${{ github.head_ref }}" =~ feature/.* && "${{ github.base_ref }}" == "main" ]]; then
             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
           elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
             echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
@@ -64,15 +64,16 @@ jobs:
         run: terraform show -json tfplan.binary > tfplan.json
         working-directory: Terraform
 
-      # Run Bandit and convert to SARIF
+      # Run Bandit → JSON → SARIF
       - name: Run Bandit (JSON → SARIF)
         run: |
           bandit -r . -f json -o bandit.json || true
-          sarif-tools from-bandit bandit.json bandit.sarif
+          python -m sarif.tools.from_bandit bandit.json bandit.sarif
 
-      # Run Checkov (SARIF)
+      # Run Checkov → SARIF
       - name: Run Checkov (SARIF)
-        run: checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
+        run: |
+          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
         working-directory: Terraform
 
       # Upload Bandit SARIF
@@ -87,7 +88,7 @@ jobs:
         with:
           sarif_file: Terraform/checkov.sarif
 
-      # Upload artifacts (optional but useful for debugging)
+      # Upload raw reports as artifacts (for debugging)
       - name: Upload Reports as Artifacts
         uses: actions/upload-artifact@v4
         with:

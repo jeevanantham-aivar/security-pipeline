@@ -68,7 +68,7 @@ jobs:
       - name: Run Bandit (JSON → SARIF)
         run: |
           bandit -r . -f json -o bandit.json || true
-          python -m sarif.tools.from_bandit bandit.json bandit.sarif
+          sarif from-bandit bandit.json bandit.sarif
 
       # Run Checkov → SARIF
       - name: Run Checkov (SARIF)

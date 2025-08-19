@@ -1,4 +1,3 @@
-
 name: Security Scan
 
 on:
@@ -7,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write  # needed for PR comments
+  pull-requests: write
   id-token: write
 
 jobs:
@@ -46,7 +45,7 @@ jobs:
           elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then
             echo "TFVARS=production/terraform.tfvars" >> $GITHUB_ENV
           else
-            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV # Default fallback
+            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
           fi
 
       - name: Set up Terraform
@@ -64,11 +63,12 @@ jobs:
         run: terraform show -json tfplan.binary > tfplan.json
         working-directory: Terraform
 
-      # ✅ Run Checkov + send results to PR comments
+      # ✅ Run Checkov + send results to PR comments using SARIF
       - name: Run Checkov with Reviewdog (PR Comments)
         run: |
-          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o json > checkov.json || true
-          cat checkov.json | reviewdog -f=checkov -name="Checkov" -reporter=github-pr-review -fail-on-error=false
+          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif > checkov.sarif || true
+          reviewdog -f=sarif -name="Checkov" -reporter=github-pr-review -fail-on-error=false < checkov.sarif
         working-directory: Terraform
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

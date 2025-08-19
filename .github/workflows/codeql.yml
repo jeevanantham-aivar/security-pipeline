@@ -61,13 +61,22 @@ jobs:
       with:
         reviewdog_version: latest
 
-    # ----------------- 6. Run Bandit -----------------
+   # ----------------- 5. Run Bandit -----------------
     - name: Run Bandit (Python Security)
       run: |
-        bandit -r . -f sarif -o bandit.sarif || true
-        reviewdog -f=sarif -name="Bandit" -reporter=github-pr-review < bandit.sarif
-      env:
-        REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        bandit -r . -f json -o bandit.json || true
+    
+    - name: Convert Bandit JSON → SARIF
+      uses: microsoft/sarif-action@v2
+      with:
+        inputFile: bandit.json
+        outputFile: bandit.sarif
+    
+    - name: Upload Bandit SARIF to GitHub
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: bandit.sarif
+
 
     # ----------------- 7. Run Checkov -----------------
     - name: Run Checkov (Terraform Security)

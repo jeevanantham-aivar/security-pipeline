@@ -1,5 +1,4 @@
 
-
 ## Project Overview
 This repository contains both the application code (`app/`) and Infrastructure-as-Code (`Terraform/`). It uses GitHub Actions to run automated security scanning with Checkov and Bandit on every change, enforcing secure IaC before merge.
 
@@ -157,4 +156,3 @@ git push -u origin feature/my-change
 - Add comprehensive comments
 - Test with all environments
 - Ensure Checkov policies pass
-

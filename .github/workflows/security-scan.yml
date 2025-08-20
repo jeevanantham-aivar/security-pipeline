@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  security-events: write   # REQUIRED for SARIF upload
   id-token: write
 
 jobs:
@@ -30,8 +31,8 @@ jobs:
 
       - name: Install Bandit and Checkov
         run: |
-          pip install bandit checkov
-      
+          pip install "bandit[sarif]" checkov
+
       - name: Set environment for plan
         id: set_env
         run: |
@@ -46,7 +47,6 @@ jobs:
           else
             echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV  # Default fallback
           fi
-        
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -63,12 +63,34 @@ jobs:
         run: terraform show -json tfplan.binary > tfplan.json
         working-directory: Terraform
 
-      - name: Run Bandit
-        run: bandit -r . -f json -o bandit-report.json || true
+      # -------- SECURITY TOOLS -------- #
 
-      - name: Run Checkov (scan plan, not .tf)
-        run: checkov -f tfplan.json --repo-root-for-plan-enrichment . -o json > checkov-report.json || true
+      - name: Run Bandit (SARIF + JSON)
+        run: |
+          bandit -r . -f json -o bandit-report.json || true
+          bandit -r . -f sarif -o bandit.sarif || true
+
+      - name: Run Checkov (SARIF + JSON)
+        run: |
+          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o json > checkov-report.json || true
+          checkov -f tfplan.json --repo-root-for-plan-enrichment . -o sarif --output-file-path checkov.sarif || true
         working-directory: Terraform
+
+      # -------- UPLOAD TO GITHUB CODE SCANNING -------- #
+
+      - name: Upload Bandit SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit.sarif
+          category: bandit
+
+      - name: Upload Checkov SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: Terraform/checkov.sarif
+          category: checkov
+
+      # -------- SUMMARY REPORT FOR PR -------- #
 
       - name: Format Reports
         run: |
@@ -99,72 +121,15 @@ jobs:
             echo ""
           } >> report.md
 
-          export REPO_URL="https://github.com/${GITHUB_REPOSITORY}"
-          export BRANCH="${GITHUB_HEAD_REF:-$(git rev-parse --abbrev-ref HEAD)}"
-
-          echo "## :cloud: Checkov Detailed Report" >> report.md
-          echo "" >> report.md
-          if [ -f Terraform/checkov-report.json ]; then
-            FAILED=$(jq '.results.failed_checks | length' Terraform/checkov-report.json 2>/dev/null || echo "0")
-            if [ "$FAILED" -gt 0 ]; then
-              jq -r --arg repo_url "$REPO_URL" --arg branch "$BRANCH" '
-                .results.failed_checks[]? |
-                  "- **" + (.check_id // "N/A") + ":** " + (.check_name // "N/A") + "\n" +
-                  (
-                    if (.file_path // "") != "" and
-                       ((.file_line_range | type) == "array" and (.file_line_range | length) > 0)
-                    then
-                      "  - **Location:** [`" + (.file_path | ltrimstr("/")) + ":" + ((.file_line_range[0]|tostring) // "?") + "`]" +
-                      "(" + $repo_url + "/blob/" + $branch + "/Terraform/" + (.file_path | ltrimstr("/")) + "#L" + ((.file_line_range|tostring) // "") + ")\n"
-                    elif .resource_address then
-                      "  - **Resource:** `" + .resource_address + "`\n"
-                    else "" end
-                  ) +
-                  "  - **Severity:** " + ((.severity // "N/A")) + "\n" +
-                  "  - **Guideline:** " + ((.guideline // "N/A")) + "\n" +
-                  "  - **Description:** " + ((.description // .check_name // "No description provided.")) + "\n"
-              ' Terraform/checkov-report.json >> report.md
-            else
-              echo ":white_check_mark: **No failed infrastructure checks found!**" >> report.md
-            fi
-          else
-            echo ":warning: Checkov report not generated." >> report.md
-          fi
-          echo "" >> report.md
-          echo "---" >> report.md
-          echo "" >> report.md
-          echo "## :snake: Bandit Detailed Report" >> report.md
-          echo "" >> report.md
-          if [ -f bandit-report.json ]; then
-            COUNT=$(jq '.results | length' bandit-report.json 2>/dev/null || echo "0")
-            if [ "$COUNT" -gt 0 ]; then
-              jq -r --arg repo_url "$REPO_URL" --arg branch "$BRANCH" '
-                .results[] |
-                  "### Issue: " + (.issue_text // "N/A") + "\n" +
-                  "- **Location:** [`" + (.filename // "unknown") + ":" + ((.line_number | tostring) // "?") + "`]" +
-                  "(" + $repo_url + "/blob/" + $branch + "/" + (.filename | ltrimstr("/")) + "#L" + (.line_number|tostring) + ")\n" +
-                  "- **Severity:** " + (.issue_severity // "N/A") + "\n" +
-                  "- **Confidence:** " + (.issue_confidence // "N/A") + "\n" +
-                  "- **CWE:** [" + ((.issue_cwe.id | tostring) // "N/A") + "](" + (.issue_cwe.link // "#") + ")\n" +
-                  "---\n"
-              ' bandit-report.json >> report.md
-            else
-              echo ":white_check_mark: **No Bandit issues found!**" >> report.md
-            fi
-          else
-            echo ":warning: Bandit report not generated." >> report.md
-          fi
-          echo "" >> report.md
-          echo "---" >> report.md
-          echo "*This report was generated automatically by the Security Scan Pipeline*" >> report.md
-
       - name: Upload Reports as Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
             bandit-report.json
+            bandit.sarif
             Terraform/checkov-report.json
+            Terraform/checkov.sarif
             report.md
           retention-days: 30
 

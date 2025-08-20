@@ -1,4 +1,3 @@
-[![Security Scan](https://github.com/OWNER/REPO/actions/workflows/security-scan.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/security-scan.yml)
 
 ## Project Overview
 This repository contains both the application code (`app/`) and Infrastructure-as-Code (`Terraform/`). It uses GitHub Actions to run automated security scanning with Checkov and Bandit on every change, enforcing secure IaC before merge.

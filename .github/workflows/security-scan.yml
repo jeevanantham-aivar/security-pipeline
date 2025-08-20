@@ -12,6 +12,9 @@
 
 # jobs:
 #   security-scan:
+
+
+
 #     if: |
 #       (startsWith(github.head_ref, 'feature/') && github.base_ref == 'develop') ||
 #       (github.head_ref == 'develop' && github.base_ref == 'stage') ||
@@ -97,6 +100,8 @@ permissions:
 
 jobs:
   security-scan:
+
+  
     if: |
       (startsWith(github.head_ref, 'feature/') && github.base_ref == 'develop') ||
       (github.head_ref == 'develop' && github.base_ref == 'stage') ||

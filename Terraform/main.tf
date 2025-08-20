@@ -24,13 +24,14 @@ provider "aws" {
     tags = {
       Environment = var.environment
       Project     = var.project_name
-      ManagedBy   = "terraform"
+      ManagedBy   = "terrafom"
     }
   }
 }
 
 
 # Call the EC2 module to create compute resources
+#checking with curl command
 module "ec2" {
   source = "./modules/ec2"
   

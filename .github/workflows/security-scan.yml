@@ -14,7 +14,8 @@ jobs:
     if: |
       (startsWith(github.head_ref, 'feature/') && github.base_ref == 'develop') ||
       (github.head_ref == 'develop' && github.base_ref == 'stage') ||
-      (github.head_ref == 'stage' && github.base_ref == 'main')
+      (github.head_ref == 'stage' && github.base_ref == 'main')||
+      (startsWith(github.head_ref, 'feature/') && github.base_ref == 'main')
     runs-on: ubuntu-latest
 
     steps:
@@ -30,6 +31,22 @@ jobs:
       - name: Install Bandit and Checkov
         run: |
           pip install bandit checkov
+      
+      - name: Set environment for plan
+        id: set_env
+        run: |
+          if [[ "${{ github.head_ref }}" == feature/* && "${{ github.base_ref }}" == "develop" ]]; then
+            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
+          elif [[ "${{ github.head_ref }}" == "feature/*" && "${{ github.base_ref }}" == "main" ]]; then
+            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV
+          elif [[ "${{ github.head_ref }}" == "develop" && "${{ github.base_ref }}" == "stage" ]]; then
+            echo "TFVARS=staging/terraform.tfvars" >> $GITHUB_ENV
+          elif [[ "${{ github.head_ref }}" == "stage" && "${{ github.base_ref }}" == "main" ]]; then
+            echo "TFVARS=production/terraform.tfvars" >> $GITHUB_ENV
+          else
+            echo "TFVARS=development/terraform.tfvars" >> $GITHUB_ENV  # Default fallback
+          fi
+        
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -39,7 +56,7 @@ jobs:
         working-directory: Terraform
 
       - name: Terraform Plan
-        run: terraform plan -var-file=./environments/dev/dev.tfvars -out=tfplan.binary
+        run: terraform plan -var-file=./environments/${TFVARS} -out=tfplan.binary
         working-directory: Terraform
 
       - name: Convert Plan to JSON
